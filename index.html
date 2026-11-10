@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>테트잇기 (v1.2)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Pretendard', sans-serif;
+            touch-action: manipulation;
+        }
+        canvas {
+            image-rendering: pixelated;
+        }
+        .view-section {
+            display: none;
+        }
+        .view-section.active {
+            display: flex;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 select-none">
+
+    <!-- 상단 헤더 -->
+    <header class="w-full max-w-4xl flex justify-between items-center bg-slate-800/90 p-3 rounded-xl border border-slate-700 mb-4">
+        <div class="flex items-center gap-2">
+            <h1 class="text-2xl font-black bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-400 bg-clip-text text-transparent">
+                🧩 테트잇기
+            </h1>
+            <span class="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono font-semibold">v1.2</span>
+        </div>
+        <button id="btn-open-settings" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs sm:text-sm rounded-lg transition font-medium flex items-center gap-1">
+            ⚙️ 게임 설정
+        </button>
+    </header>
+
+    <!-- ==================== 1. 로비 화면 ==================== -->
+    <section id="view-lobby" class="view-section active w-full max-w-md bg-slate-800/60 p-6 rounded-2xl border border-slate-700 flex-col gap-6 text-center shadow-xl">
+        <div class="space-y-1">
+            <h2 class="text-xl font-bold text-slate-100">게임 로비</h2>
+            <p class="text-xs text-slate-400">방을 만들거나 방 코드를 입력해 친구들과 턴잇기를 시작하세요!</p>
+        </div>
+
+        <button id="btn-single-start" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl font-bold text-sm shadow-lg transition">
+            🎮 혼자서 연습하기
+        </button>
+
+        <div class="relative flex py-1 items-center">
+            <div class="flex-grow border-t border-slate-700"></div>
+            <span class="flex-shrink mx-4 text-xs text-slate-500 font-semibold">또는 멀티플레이</span>
+            <div class="flex-grow border-t border-slate-700"></div>
+        </div>
+
+        <div class="flex flex-col gap-2 bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/80">
+            <span class="text-xs text-slate-400 text-left font-semibold">새로운 멀티방 만들기</span>
+            <div class="flex gap-2">
+                <select id="select-max-players" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-sm flex-1">
+                    <option value="2">2명 턴잇기</option>
+                    <option value="3">3명 턴잇기</option>
+                    <option value="4" selected>4명 턴잇기</option>
+                </select>
+                <button id="btn-create-room" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg text-sm font-bold transition">
+                    방 생성
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-2 bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/80">
+            <span class="text-xs text-slate-400 text-left font-semibold">코드로 방 참여하기</span>
+            <div class="flex gap-2">
+                <input type="text" id="input-room-code" placeholder="6자리 코드 입력" maxlength="6" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm flex-1 uppercase tracking-wider font-mono">
+                <button id="btn-join-room" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg text-sm font-bold transition">
+                    입장
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== 2. 대기실 / 시작 화면 ==================== -->
+    <section id="view-room" class="view-section w-full max-w-md bg-slate-800/60 p-6 rounded-2xl border border-slate-700 flex-col gap-5 text-center shadow-xl">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+            <span class="text-xs text-slate-400">방 코드: <strong id="display-room-code" class="text-cyan-400 font-mono text-base">------</strong></span>
+            <button id="btn-leave-room" class="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-red-400 font-medium">로비로 나가기</button>
+        </div>
+
+        <div class="text-left space-y-2">
+            <span class="text-xs text-slate-400 font-semibold block">참여 중인 플레이어 (<span id="player-count">1</span>/<span id="max-player-count">4</span>)</span>
+            <ul id="player-list" class="flex flex-col gap-2">
+                <li class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700 flex justify-between items-center">
+                    <span class="text-sm font-bold text-emerald-400">👤 플레이어 1 (방장)</span>
+                    <span class="text-[10px] bg-emerald-900/50 text-emerald-300 px-2 py-0.5 rounded">준비 완료</span>
+                </li>
+            </ul>
+        </div>
+
+        <button id="btn-start-game" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 rounded-xl font-bold text-base shadow-lg transition mt-2">
+            🚀 게임 시작하기!
+        </button>
+    </section>
+
+    <!-- ==================== 3. 게임 플레이 창 ==================== -->
+    <section id="view-game" class="view-section w-full max-w-4xl bg-slate-800/50 p-4 rounded-2xl border border-slate-700 flex-col items-center justify-center relative shadow-2xl">
+        
+        <div class="w-full flex justify-between items-center mb-3">
+            <div id="turn-banner" class="px-4 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-xs sm:text-sm font-bold flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" id="turn-indicator-dot"></span>
+                <span id="turn-text" class="text-slate-200">플레이어 1의 턴입니다</span>
+            </div>
+            <button id="btn-quit-game" class="text-xs bg-red-900/60 hover:bg-red-800 text-red-200 px-3 py-1.5 rounded-lg border border-red-700/50">
+                게임 종료
+            </button>
+        </div>
+
+        <div class="flex flex-wrap justify-center gap-4 items-start">
+            
+            <div class="flex flex-col gap-3">
+                <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-700 text-center">
+                    <span class="text-[10px] text-slate-400 font-bold block mb-1">보관</span>
+                    <canvas id="canvas-hold" width="70" height="70" class="bg-slate-950 rounded-lg"></canvas>
+                </div>
+                <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-700 text-center">
+                    <span class="text-[10px] text-slate-400 font-bold block mb-1">다음</span>
+                    <canvas id="canvas-next" width="70" height="70" class="bg-slate-950 rounded-lg"></canvas>
+                </div>
+                <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-700 text-center">
+                    <span class="text-[10px] text-slate-400 block font-bold">점수</span>
+                    <span id="text-score" class="font-mono text-base font-bold text-amber-400">0</span>
+                </div>
+            </div>
+
+            <div class="relative">
+                <canvas id="canvas-main" width="240" height="480" class="bg-slate-950 rounded-xl border-2 border-slate-700 shadow-2xl"></canvas>
+                
+                <div id="game-overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center gap-3 hidden">
+                    <h3 id="overlay-title" class="text-2xl font-black text-red-500">게임 종료</h3>
+                    <button id="btn-restart" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold text-xs">다시 하기</button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 모바일 터치 조작 버튼 -->
+        <div id="mobile-touch-controls" class="hidden grid grid-cols-5 gap-2 w-full max-w-xs mt-4">
+            <button id="btn-touch-left" class="bg-slate-700 active:bg-slate-600 p-3 rounded-xl text-center text-lg font-bold">←</button>
+            <button id="btn-touch-rotate" class="bg-slate-700 active:bg-slate-600 p-3 rounded-xl text-center text-lg font-bold">↻</button>
+            <button id="btn-touch-right" class="bg-slate-700 active:bg-slate-600 p-3 rounded-xl text-center text-lg font-bold">→</button>
+            <button id="btn-touch-soft" class="bg-slate-700 active:bg-slate-600 p-3 rounded-xl text-center text-lg font-bold">↓</button>
+            <button id="btn-touch-drop" class="bg-indigo-600 active:bg-indigo-500 p-3 rounded-xl text-center text-xs font-bold">낙하</button>
+        </div>
+
+    </section>
+
+    <!-- ==================== 4. 통합 설정 모달 (Settings Modal) ==================== -->
+    <div id="modal-settings" class="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 w-full max-w-md flex flex-col gap-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-bold text-slate-100 flex justify-between items-center border-b border-slate-700 pb-2">
+                ⚙️ 통합 게임 설정
+                <button id="btn-close-settings" class="text-slate-400 hover:text-white text-sm">✕</button>
+            </h3>
+
+            <!-- 화면 표시 설정 -->
+            <div class="flex flex-col gap-3">
+                <span class="text-xs font-bold text-cyan-400 uppercase tracking-wider">디스플레이 옵션</span>
+                
+                <div class="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl border border-slate-700">
+                    <span class="text-sm font-medium">격자 가이드라인 표시</span>
+                    <input type="checkbox" id="toggle-grid" class="w-5 h-5 accent-cyan-500 rounded cursor-pointer" checked>
+                </div>
+
+                <div class="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl border border-slate-700">
+                    <span class="text-sm font-medium">낙하 위치 (고스트) 표시</span>
+                    <input type="checkbox" id="toggle-ghost" class="w-5 h-5 accent-cyan-500 rounded cursor-pointer" checked>
+                </div>
+            </div>
+
+            <!-- 조작키 설정 -->
+            <div class="flex flex-col gap-2">
+                <span class="text-xs font-bold text-cyan-400 uppercase tracking-wider mt-2">조작키 커스텀</span>
+                <p class="text-xs text-slate-400">변경할 항목 버튼을 누른 뒤 바꿀 키보드 키를 입력하세요.</p>
+
+                <div class="flex flex-col gap-1.5 text-xs sm:text-sm">
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded-lg">
+                        <span>왼쪽 이동</span>
+                        <button data-action="left" class="key-bind-btn bg-slate-700 px-3 py-1 rounded text-xs font-mono text-cyan-300 border border-slate-600">ArrowLeft</button>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded-lg">
+                        <span>오른쪽 이동</span>
+                        <button data-action="right" class="key-bind-btn bg-slate-700 px-3 py-1 rounded text-xs font-mono text-cyan-300 border border-slate-600">ArrowRight</button>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded-lg">
+                        <span>회전</span>
+                        <button data-action="rotate" class="key-bind-btn bg-slate-700 px-3 py-1 rounded text-xs font-mono text-cyan-300 border border-slate-600">ArrowUp</button>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded-lg">
+                        <span>빠른 낙하</span>
+                        <button data-action="softDrop" class="key-bind-btn bg-slate-700 px-3 py-1 rounded text-xs font-mono text-cyan-300 border border-slate-600">ArrowDown</button>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded-lg">
+                        <span>즉시 낙하</span>
+                        <button data-action="hardDrop" class="key-bind-btn bg-slate-700 px-3 py-1 rounded text-xs font-mono text-cyan-300 border border-slate-600">Space</button>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded-lg">
+                        <span>보관 (Hold)</span>
+                        <button data-action="hold" class="key-bind-btn bg-slate-700 px-3 py-1 rounded text-xs font-mono text-cyan-300 border border-slate-600">KeyC</button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-save-settings" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm transition mt-2 shadow-lg">
+                설정 저장 완료
+            </button>
+        </div>
+    </div>
+
+    <!-- 게임 엔진 & 설정 스크립트 (v1.2) -->
+    <script>
+        function detectMobileTouch() {
+            const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const touchControls = document.getElementById('mobile-touch-controls');
+            if (isTouch) touchControls.classList.remove('hidden');
+            else touchControls.classList.add('hidden');
+        }
+        detectMobileTouch();
+
+        const views = {
+            lobby: document.getElementById('view-lobby'),
+            room: document.getElementById('view-room'),
+            game: document.getElementById('view-game')
+        };
+        function switchView(target) {
+            Object.values(views).forEach(v => v.classList.remove('active'));
+            views[target].classList.add('active');
+        }
+
+        const COLS = 10, ROWS = 20, BLOCK_SIZE = 24;
+        const mainCanvas = document.getElementById('canvas-main');
+        const ctx = mainCanvas.getContext('2d');
+        const holdCanvas = document.getElementById('canvas-hold');
+        const holdCtx = holdCanvas.getContext('2d');
+        const nextCanvas = document.getElementById('canvas-next');
+        const nextCtx = nextCanvas.getContext('2d');
+
+        const SHAPES = [
+            [],
+            [[1,1,1,1]], // I
+            [[1,1,1],[1,0,0]], // J
+            [[1,1,1],[0,0,1]], // L
+            [[1,1],[1,1]], // O
+            [[0,1,1],[1,1,0]], // S
+            [[1,1,1],[0,1,0]], // T
+            [[1,1,0],[0,1,1]]  // Z
+        ];
+        const COLORS = [null, '#00f0f0', '#0000f0', '#f0a000', '#f0f000', '#00f000', '#a000f0', '#f00000'];
+
+        let board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+        let score = 0;
+        let currentPiece = null;
+        let nextPiece = null;
+        let holdPiece = null;
+        let canHold = true;
+        let dropCounter = 0;
+        let dropInterval = 800;
+        let lockTimer = 0;
+        const LOCK_DELAY = 500; // 바닥에 붙었을 때 고정까지의 여유 시간 (ms)
+        let lastTime = 0;
+        let isGameOver = false;
+        let gameLoopReq = null;
+        let maxPlayers = 1;
+        let currentTurnPlayer = 1;
+
+        // 게임 설정값
+        let gameSettings = {
+            showGrid: true,
+            showGhost: true,
+            keyMap: {
+                left: 'ArrowLeft',
+                right: 'ArrowRight',
+                rotate: 'ArrowUp',
+                softDrop: 'ArrowDown',
+                hardDrop: 'Space',
+                hold: 'KeyC'
+            }
+        };
+
+        const savedSettings = localStorage.getItem('tet-it-gi_v1.2_settings');
+        if (savedSettings) {
+            try { gameSettings = { ...gameSettings, ...JSON.parse(savedSettings) }; } catch(e){}
+        }
+
+        // DAS / ARR 매끄러운 연타 엔진
+        const keysPressed = {};
+        const keyTimers = {
+            left: { held: false, timer: 0 },
+            right: { held: false, timer: 0 },
+            softDrop: { held: false, timer: 0 }
+        };
+        const DAS = 130;
+        const ARR = 35;
+
+        function createPiece(type) {
+            const id = type || (Math.floor(Math.random() * 7) + 1);
+            const shape = SHAPES[id];
+            return {
+                shape: shape,
+                color: id,
+                x: Math.floor((COLS - shape[0].length) / 2),
+                y: 0
+            };
+        }
+
+        function collide(b, p) {
+            for (let r = 0; r < p.shape.length; r++) {
+                for (let c = 0; c < p.shape[r].length; c++) {
+                    if (p.shape[r][c] !== 0) {
+                        let newX = p.x + c;
+                        let newY = p.y + r;
+                        if (newX < 0 || newX >= COLS || newY >= ROWS) return true;
+                        if (newY >= 0 && b[newY][newX] !== 0) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function merge(b, p) {
+            for (let r = 0; r < p.shape.length; r++) {
+                for (let c = 0; c < p.shape[r].length; c++) {
+                    if (p.shape[r][c] !== 0 && p.y + r >= 0) {
+                        b[p.y + r][p.x + c] = p.color;
+                    }
+                }
+            }
+        }
+
+        function rotate(shape) {
+            const r = shape.length;
+            const c = shape[0].length;
+            let result = Array.from({ length: c }, () => Array(r).fill(0));
+            for (let i = 0; i < r; i++) {
+                for (let j = 0; j < c; j++) {
+                    result[j][r - 1 - i] = shape[i][j];
+                }
+            }
+            return result;
+        }
+
+        function playerRotate() {
+            if (!currentPiece || isGameOver) return;
+            const oldShape = currentPiece.shape;
+            currentPiece.shape = rotate(currentPiece.shape);
+            if (collide(board, currentPiece)) {
+                currentPiece.shape = oldShape;
+            } else {
+                lockTimer = 0; // 바닥에서도 회전 시 착지시간 리셋
+            }
+        }
+
+        function clearLines() {
+            let linesCleared = 0;
+            outer: for (let r = ROWS - 1; r >= 0; r--) {
+                for (let c = 0; c < COLS; c++) {
+                    if (board[r][c] === 0) continue outer;
+                }
+                const row = board.splice(r, 1)[0].fill(0);
+                board.unshift(row);
+                linesCleared++;
+                r++;
+            }
+            if (linesCleared > 0) {
+                score += linesCleared * 100;
+                document.getElementById('text-score').textContent = score;
+            }
+        }
+
+        function nextTurn() {
+            if (maxPlayers > 1) {
+                currentTurnPlayer = (currentTurnPlayer % maxPlayers) + 1;
+                document.getElementById('turn-text').textContent = `플레이어 ${currentTurnPlayer}의 턴입니다`;
+            }
+        }
+
+        function moveLeft() {
+            if (!currentPiece || isGameOver) return;
+            currentPiece.x--;
+            if (collide(board, currentPiece)) {
+                currentPiece.x++;
+            } else {
+                lockTimer = 0; // 바닥에서도 continuous 이동 시 착지 타이머 리셋
+            }
+        }
+
+        function moveRight() {
+            if (!currentPiece || isGameOver) return;
+            currentPiece.x++;
+            if (collide(board, currentPiece)) {
+                currentPiece.x--;
+            } else {
+                lockTimer = 0; // 바닥에서도 continuous 이동 시 착지 타이머 리셋
+            }
+        }
+
+        function playerDrop() {
+            if (!currentPiece || isGameOver) return;
+            currentPiece.y++;
+            if (collide(board, currentPiece)) {
+                currentPiece.y--;
+                // 바로 고정하지 않고 Lock Delay 타임아웃 이후 고정
+            } else {
+                dropCounter = 0;
+            }
+        }
+
+        function lockPiece() {
+            merge(board, currentPiece);
+            clearLines();
+            canHold = true;
+            spawnPiece();
+            nextTurn();
+            dropCounter = 0;
+            lockTimer = 0;
+        }
+
+        function playerHardDrop() {
+            if (!currentPiece || isGameOver) return;
+            while (!collide(board, currentPiece)) {
+                currentPiece.y++;
+            }
+            currentPiece.y--;
+            lockPiece();
+        }
+
+        function playerHold() {
+            if (!canHold || isGameOver || !currentPiece) return;
+            if (!holdPiece) {
+                holdPiece = createPiece(currentPiece.color);
+                spawnPiece();
+            } else {
+                let temp = currentPiece.color;
+                currentPiece = createPiece(holdPiece.color);
+                holdPiece = createPiece(temp);
+            }
+            canHold = false;
+            drawSubCanvas(holdCtx, holdPiece);
+        }
+
+        function spawnPiece() {
+            if (!nextPiece) nextPiece = createPiece();
+            currentPiece = nextPiece;
+            nextPiece = createPiece();
+            drawSubCanvas(nextCtx, nextPiece);
+
+            if (collide(board, currentPiece)) {
+                isGameOver = true;
+                document.getElementById('game-overlay').classList.remove('hidden');
+            }
+        }
+
+        function drawSubCanvas(targetCtx, piece) {
+            targetCtx.fillStyle = '#020617';
+            targetCtx.fillRect(0, 0, 70, 70);
+            if (!piece) return;
+            const matrix = piece.shape;
+            const size = 14;
+            const w = matrix[0].length * size;
+            const h = matrix.length * size;
+            const offsetX = (70 - w) / 2;
+            const offsetY = (70 - h) / 2;
+            targetCtx.fillStyle = COLORS[piece.color];
+            for (let r = 0; r < matrix.length; r++) {
+                for (let c = 0; c < matrix[r].length; c++) {
+                    if (matrix[r][c] !== 0) {
+                        targetCtx.fillRect(offsetX + c * size + 1, offsetY + r * size + 1, size - 2, size - 2);
+                    }
+                }
+            }
+        }
+
+        function drawGhostPiece() {
+            if (!currentPiece || !gameSettings.showGhost) return;
+            const ghost = {
+                shape: currentPiece.shape,
+                color: currentPiece.color,
+                x: currentPiece.x,
+                y: currentPiece.y
+            };
+            while (!collide(board, ghost)) {
+                ghost.y++;
+            }
+            ghost.y--;
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            for (let r = 0; r < ghost.shape.length; r++) {
+                for (let c = 0; c < ghost.shape[r].length; c++) {
+                    if (ghost.shape[r][c] !== 0) {
+                        ctx.fillRect((ghost.x + c) * BLOCK_SIZE + 1, (ghost.y + r) * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+                    }
+                }
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, mainCanvas.width, mainCanvas.height);
+
+            // 격자선 (가이드라인 옵션)
+            if (gameSettings.showGrid) {
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 0.5;
+                for (let r = 0; r < ROWS; r++) {
+                    for (let c = 0; c < COLS; c++) {
+                        ctx.strokeRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    }
+                }
+            }
+
+            // 쌓인 블록
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (board[r][c]) {
+                        ctx.fillStyle = COLORS[board[r][c]];
+                        ctx.fillRect(c * BLOCK_SIZE + 1, r * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+                    }
+                }
+            }
+
+            // 고스트 블록
+            drawGhostPiece();
+
+            // 조작 블록
+            if (currentPiece) {
+                ctx.fillStyle = COLORS[currentPiece.color];
+                for (let r = 0; r < currentPiece.shape.length; r++) {
+                    for (let c = 0; c < currentPiece.shape[r].length; c++) {
+                        if (currentPiece.shape[r][c] !== 0) {
+                            ctx.fillRect((currentPiece.x + c) * BLOCK_SIZE + 1, (currentPiece.y + r) * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 연속 이동 및 프레임 입력 처리
+        function handleInput(deltaTime) {
+            if (!views.game.classList.contains('active') || isGameOver) return;
+
+            const keyMap = gameSettings.keyMap;
+
+            if (keysPressed[keyMap.left]) {
+                if (!keyTimers.left.held) {
+                    moveLeft();
+                    keyTimers.left.held = true;
+                    keyTimers.left.timer = 0;
+                } else {
+                    keyTimers.left.timer += deltaTime;
+                    if (keyTimers.left.timer >= DAS) {
+                        moveLeft();
+                        keyTimers.left.timer -= ARR;
+                    }
+                }
+            } else {
+                keyTimers.left.held = false;
+                keyTimers.left.timer = 0;
+            }
+
+            if (keysPressed[keyMap.right]) {
+                if (!keyTimers.right.held) {
+                    moveRight();
+                    keyTimers.right.held = true;
+                    keyTimers.right.timer = 0;
+                } else {
+                    keyTimers.right.timer += deltaTime;
+                    if (keyTimers.right.timer >= DAS) {
+                        moveRight();
+                        keyTimers.right.timer -= ARR;
+                    }
+                }
+            } else {
+                keyTimers.right.held = false;
+                keyTimers.right.timer = 0;
+            }
+
+            if (keysPressed[keyMap.softDrop]) {
+                if (!keyTimers.softDrop.held) {
+                    playerDrop();
+                    keyTimers.softDrop.held = true;
+                    keyTimers.softDrop.timer = 0;
+                } else {
+                    keyTimers.softDrop.timer += deltaTime;
+                    if (keyTimers.softDrop.timer >= 40) {
+                        playerDrop();
+                        keyTimers.softDrop.timer = 0;
+                    }
+                }
+            } else {
+                keyTimers.softDrop.held = false;
+                keyTimers.softDrop.timer = 0;
+            }
+        }
+
+        function gameLoop(time = 0) {
+            if (isGameOver) return;
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            handleInput(deltaTime);
+
+            // 자동 낙하 & 바닥 착지 지연(Lock Delay) 처리
+            dropCounter += deltaTime;
+            if (dropCounter > dropInterval) {
+                currentPiece.y++;
+                if (collide(board, currentPiece)) {
+                    currentPiece.y--;
+                } else {
+                    dropCounter = 0;
+                    lockTimer = 0;
+                }
+            }
+
+            // 바닥 접촉 확인 및 고정 판정
+            currentPiece.y++;
+            const isTouchingBottom = collide(board, currentPiece);
+            currentPiece.y--;
+
+            if (isTouchingBottom) {
+                lockTimer += deltaTime;
+                if (lockTimer >= LOCK_DELAY) {
+                    lockPiece();
+                }
+            } else {
+                lockTimer = 0;
+            }
+
+            draw();
+            gameLoopReq = requestAnimationFrame(gameLoop);
+        }
+
+        function startGame(players = 1) {
+            maxPlayers = players;
+            currentTurnPlayer = 1;
+            board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+            score = 0;
+            document.getElementById('text-score').textContent = score;
+            document.getElementById('turn-text').textContent = maxPlayers > 1 ? "플레이어 1의 턴입니다" : "싱글 연습 모드 (v1.2)";
+            isGameOver = false;
+            document.getElementById('game-overlay').classList.add('hidden');
+            holdPiece = null;
+            canHold = true;
+            nextPiece = createPiece();
+            spawnPiece();
+            lastTime = performance.now();
+            if (gameLoopReq) cancelAnimationFrame(gameLoopReq);
+            gameLoopReq = requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', e => {
+            if (activeAction) return;
+            keysPressed[e.code] = true;
+
+            const keyMap = gameSettings.keyMap;
+            if (views.game.classList.contains('active') && !isGameOver) {
+                if (e.code === keyMap.rotate) {
+                    playerRotate();
+                } else if (e.code === keyMap.hardDrop) {
+                    playerHardDrop();
+                } else if (e.code === keyMap.hold) {
+                    playerHold();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', e => {
+            keysPressed[e.code] = false;
+        });
+
+        // 뷰 버튼
+        document.getElementById('btn-single-start').addEventListener('click', () => {
+            switchView('game');
+            startGame(1);
+        });
+
+        document.getElementById('btn-create-room').addEventListener('click', () => {
+            const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+            document.getElementById('display-room-code').textContent = code;
+            maxPlayers = parseInt(document.getElementById('select-max-players').value);
+            document.getElementById('max-player-count').textContent = maxPlayers;
+            switchView('room');
+        });
+
+        document.getElementById('btn-join-room').addEventListener('click', () => {
+            const code = document.getElementById('input-room-code').value.trim();
+            if (code.length === 6) {
+                document.getElementById('display-room-code').textContent = code.toUpperCase();
+                switchView('room');
+            } else {
+                alert("올바른 6자리 방 코드를 입력해주세요.");
+            }
+        });
+
+        document.getElementById('btn-leave-room').addEventListener('click', () => switchView('lobby'));
+        document.getElementById('btn-quit-game').addEventListener('click', () => {
+            isGameOver = true;
+            if (gameLoopReq) cancelAnimationFrame(gameLoopReq);
+            switchView('lobby');
+        });
+        document.getElementById('btn-start-game').addEventListener('click', () => {
+            switchView('game');
+            startGame(maxPlayers);
+        });
+        document.getElementById('btn-restart').addEventListener('click', () => startGame(maxPlayers));
+
+        // 모바일 버튼
+        document.getElementById('btn-touch-left').addEventListener('click', () => moveLeft());
+        document.getElementById('btn-touch-right').addEventListener('click', () => moveRight());
+        document.getElementById('btn-touch-rotate').addEventListener('click', () => playerRotate());
+        document.getElementById('btn-touch-soft').addEventListener('click', () => playerDrop());
+        document.getElementById('btn-touch-drop').addEventListener('click', () => playerHardDrop());
+
+        // ================= 설정 모달 로직 =================
+        let activeAction = null;
+        const modalSettings = document.getElementById('modal-settings');
+        const toggleGrid = document.getElementById('toggle-grid');
+        const toggleGhost = document.getElementById('toggle-ghost');
+
+        document.getElementById('btn-open-settings').addEventListener('click', () => {
+            toggleGrid.checked = gameSettings.showGrid;
+            toggleGhost.checked = gameSettings.showGhost;
+            updateKeymapUI();
+            modalSettings.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-close-settings').addEventListener('click', () => {
+            modalSettings.classList.add('hidden');
+            activeAction = null;
+        });
+
+        document.getElementById('btn-save-settings').addEventListener('click', () => {
+            gameSettings.showGrid = toggleGrid.checked;
+            gameSettings.showGhost = toggleGhost.checked;
+            localStorage.setItem('tet-it-gi_v1.2_settings', JSON.stringify(gameSettings));
+            modalSettings.classList.add('hidden');
+            activeAction = null;
+            draw();
+        });
+
+        function updateKeymapUI() {
+            document.querySelectorAll('.key-bind-btn').forEach(btn => {
+                const action = btn.dataset.action;
+                btn.textContent = gameSettings.keyMap[action] || '미지정';
+            });
+        }
+
+        document.querySelectorAll('.key-bind-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                activeAction = e.target.dataset.action;
+                e.target.textContent = '입력 대기중...';
+            });
+        });
+
+        window.addEventListener('keydown', e => {
+            if (activeAction) {
+                e.preventDefault();
+                gameSettings.keyMap[activeAction] = e.code;
+                activeAction = null;
+                updateKeymapUI();
+            }
+        });
+    </script>
+</body>
+</html>
